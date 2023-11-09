@@ -1,0 +1,14 @@
+TRAIN_PROCESS:
+R_F,R_S,R_F,R_S,R_F,R_F,R_F,R_S,R_S,L_S
+L_F,L_F,L_F,L_S,
+T_L_S_COUNT: 2;  T_R_S_COUNT: 4 .
+
+T_L_F_COUNT: 3;  T_R_F_COUNT: 5 .
+
+NARS_PROCESS:
+R_F,R_S,R_F,R_F,R_S,R_S,L_S,L_F,L_F,L_F
+L_S,R_S,R_F,R_F,R_F,R_F,R_F,R_S,R_S,R_F
+R_F,
+N_L_S_COUNT: 2;  N_R_S_COUNT: 6 .
+
+N_L_F_COUNT: 3;  N_R_F_COUNT: 10 .

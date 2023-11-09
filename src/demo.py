@@ -1,3 +1,6 @@
+from datetime import datetime
+from os import path
+from openpyxl import Workbook
 import random
 import sys
 import time
@@ -23,20 +26,16 @@ class Constants:
         "路径相关"
 
         ROOT_PATH = '../' if 'src' in getcwd() else './'
-
         "项目（包括src、assets等）的根路径。随VSCode调试路径的变化而变化"
+
         RESULT_PATH = ROOT_PATH + 'result/'
-
         "存放（结果）数据文件的路径（默认为`../result/`）"
+
         ASSETS_PATH = ROOT_PATH + 'assets/'
-
         "存放资源文件的路径（默认为`../assets/`）"
+
         EXECUTABLE_PATH = ROOT_PATH + 'executable/'
-
         "存放可执行文件（NARS实现）的路径（默认为`../executable/`）"
-        DATA_PATH = RESULT_PATH + "test.xlsx"
-
-        "保存实验结果（表格等）的位置"
 
     class display:
         "显示相关"
@@ -113,11 +112,23 @@ class Constants:
 
         # ! 「结果保存位置」已迁移至path
         # 过程数据sheet及txt文件名称
-        # TODO: 这里可以优化，不再需要一个个写名称
         # name = ['3_1_1_1','3_1_1_2','3_1_1_3','3_1_1_4','3_1_1_5','3_1_1_6','3_1_1_7','3_1_1_8','3_1_1_9','3_1_1_10']
-        NAME = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
-        SHEET_NAME = NAME[9]
-        TXT_NAME = NAME[9] + '.txt'
+        _NOW = datetime.now()
+        "获取当前时间，以便让数据结果唯一"
+
+        # NAME = f'{_NOW.year}{str(_NOW.month).zfill(2)}{str(_NOW.day).zfill(2)}-{str(_NOW.hour).zfill(2)}_{str(_NOW.minute).zfill(2)}_{str(_NOW.second).zfill(2)}'
+        NAME = '%.04d%.02d%.02d-%.02d%.02d%.02d' % (
+            _NOW.year, _NOW.month, _NOW.day, _NOW.hour, _NOW.minute, _NOW.second)
+        "使用当前时间生成的「唯一性名称」，使用「_NOW.minute」"  # * 样例：`20220725-11_11_11`
+
+        SHEET_NAME = NAME
+        "工作表名称"
+
+        EXCEL_NAME = f'[{NAME}]datas.xlsx'
+        "工作簿文件名"  # !【2023-11-10 01:37:28】目前暂时无法实现「相同文件中新增工作表」，只能不断新建
+
+        TXT_NAME = f'[{NAME}]experiences.txt'
+        "经验数据的文本文件路径"
 
         # 实验标题
         VISDOM_TITLE = '实验：修正传感器的影响'
@@ -296,15 +307,15 @@ class Game:
 
     def getSensor(self):
         "小车获取当前位置--获取感知信息"  # TODO: 或许这个也要和论文所说一样，纳入「接口」模块中
-        # print('lsensor:' + str(self.car.rect.x - self.wall_1.rect.x + Constants.WALL_WIDTH))
-        # print('rsensor:' + str(self.wall_2.rect.x - self.car.rect.x - Constants.CAR_WIDTH))
+        # print('l_sensor:' + str(self.car.rect.x - self.wall_1.rect.x + Constants.WALL_WIDTH))
+        # print('r_sensor:' + str(self.wall_2.rect.x - self.car.rect.x - Constants.CAR_WIDTH))
         # print('#########################')
-        # print('lsensor_n:' + str(self.car.rect.x - Constants.WALL_WIDTH - Constants.LEFT_GAP_DISTANCE))
-        # print('rsensor_n:' + str(Constants.SCREEN_WIDTH - self.car.rect.x - Constants.CAR_WIDTH - Constants.WALL_WIDTH - Constants.RIGHT_GAP_DISTANCE))
-        self.NARS.put("<{lsensor} --> [" + str(self.car.rect.x - Constants.display.WALL_WIDTH -
-                                               Constants.display.LEFT_GAP_DISTANCE) + "]>. :|:")  # 告知NARS现在左侧的位置
-        self.NARS.put("<{rsensor} --> [" + str(Constants.display.SCREEN_WIDTH - self.car.rect.x - Constants.display.CAR_WIDTH -
-                                               Constants.display.WALL_WIDTH - Constants.display.RIGHT_GAP_DISTANCE) + "]>. :|:")  # 告知NARS现在右侧的位置
+        # print('l_sensor_n:' + str(self.car.rect.x - Constants.WALL_WIDTH - Constants.LEFT_GAP_DISTANCE))
+        # print('r_sensor_n:' + str(Constants.SCREEN_WIDTH - self.car.rect.x - Constants.CAR_WIDTH - Constants.WALL_WIDTH - Constants.RIGHT_GAP_DISTANCE))
+        self.NARS.put("<{l_sensor} --> [" + str(self.car.rect.x - Constants.display.WALL_WIDTH -
+                                                Constants.display.LEFT_GAP_DISTANCE) + "]>. :|:")  # 告知NARS现在左侧的位置
+        self.NARS.put("<{r_sensor} --> [" + str(Constants.display.SCREEN_WIDTH - self.car.rect.x - Constants.display.CAR_WIDTH -
+                                                Constants.display.WALL_WIDTH - Constants.display.RIGHT_GAP_DISTANCE) + "]>. :|:")  # 告知NARS现在右侧的位置
 
     def move_left(self):
         "左移运动"
@@ -722,96 +733,124 @@ class Game:
         pygame.display.update()
         self.clock.tick(5)
 
-    def write_data(self):
+    def write_data(self):  # TODO: 📌数据保存问题
         "将数据写入表格和txt文件"
         print("enter in write_data")
-        header = ["时间", "总成绩", "训练成绩", "学习成绩", 'NARS活跃度']
-        writer = pd.ExcelWriter(Constants.path.DATA_PATH, engine='openpyxl')
-        book = load_workbook(Constants.path.DATA_PATH)
-        writer.book = book
-        data = pd.DataFrame(self.datas, columns=header)
-        data.to_excel(
-            writer, sheet_name=Constants.stats.SHEET_NAME, index=False)
-        writer.save()
-        print("数据写入完毕！")
+        self.write_excel()
+        print("数据EXCEL写入完毕！")
         self.write_process_txt()
-        print("txt保存完毕！")
+        print("经验txt保存完毕！")
+
+    def write_excel(self):
+        "将数据写入表格"
+        # 数据⇒数据框
+        data_frame = pd.DataFrame(
+            self.datas,
+            columns=["时间", "总成绩", "训练成绩", "学习成绩", 'NARS活跃度'])
+        # 打开工作簿
+        writer = pd.ExcelWriter(
+            Constants.path.RESULT_PATH + Constants.stats.EXCEL_NAME, engine='openpyxl')
+        book = None
+        # 确定工作簿（尝试读取旧文件）
+        try:
+            '''#!跳过报错：zipfile.BadZipFile: File is not a zip file'''
+            if path.exists(Constants.path.RESULT_PATH + Constants.stats.EXCEL_NAME):
+                book = load_workbook(
+                    Constants.path.RESULT_PATH + Constants.stats.EXCEL_NAME)
+        except BaseException as e:
+            print('工作簿读取异常：', e.with_traceback(None) if e else e)
+            book = writer.book
+            '''
+            根据新的错误信息,可以看到是在为ExcelWriter的book属性赋值时报错了,提示该属性不可设置。
+            根据Openpyxl文档,ExcelWriter初始化时会新建一个Workbook,之后不能再修改该属性。
+            所以可以这样修复原代码:
+            '''
+        # 数据框⇒Excel表格（指定工作表）
+        data_frame.to_excel(
+            writer,
+            sheet_name=Constants.stats.SHEET_NAME,
+            index=False)
+        # 保存，关闭
+        book.save(filename=Constants.path.RESULT_PATH +
+                  Constants.stats.EXCEL_NAME)  # 是工作簿保存，不是写入者保存
+        # writer.save()
+        writer.close()  # 关闭写入流
 
     def write_process_txt(self):
         "将经验数据写入txt文件"
-        file_path = Constants.stats.TXT_NAME
-        f = open(file_path, "w")
-        T_LS_count = 0
-        T_RS_count = 0
-        N_LS_count = 0
-        N_RS_count = 0
-        T_LF_count = 0
-        T_RF_count = 0
-        N_LF_count = 0
-        N_RF_count = 0
-        f.write('TRAIN_PROCESS:'+'\n')
-        for i in range(1, len(Constants.stats.TRAIN_PROCESS)+1):
-            f.write(Constants.stats.TRAIN_PROCESS[i-1])
-            if Constants.stats.TRAIN_PROCESS[i-1] == 'L_S':
-                T_LS_count += 1
-            elif Constants.stats.TRAIN_PROCESS[i-1] == 'R_S':
-                T_RS_count += 1
-            if Constants.stats.TRAIN_PROCESS[i-1] == 'L_F':
-                T_LF_count += 1
-            elif Constants.stats.TRAIN_PROCESS[i-1] == 'R_F':
-                T_RF_count += 1
-            if i % 10 == 0:
-                f.write('\n')
-            else:
-                f.write(',')
-            i += 1
-        f.write('\n' + 'T_L_S_COUNT: %d' % T_LS_count +
-                ';  T_R_S_COUNT: %d' % T_RS_count + ' .\n')
-        f.write('\n' + 'T_L_F_COUNT: %d' % T_LF_count +
-                ';  T_R_F_COUNT: %d' % T_RF_count + ' .\n')
-        f.write('\n')
-        f.write('NARS_PROCESS:'+'\n')
-        for i in range(1, len(Constants.stats.NARS_PROCESS)+1):
-            f.write(Constants.stats.NARS_PROCESS[i-1])
-            if Constants.stats.NARS_PROCESS[i-1] == 'L_S':
-                N_LS_count += 1
-            elif Constants.stats.NARS_PROCESS[i-1] == 'R_S':
-                N_RS_count += 1
-            if Constants.stats.NARS_PROCESS[i-1] == 'L_F':
-                N_LF_count += 1
-            elif Constants.stats.NARS_PROCESS[i-1] == 'R_F':
-                N_RF_count += 1
-            if i % 10 == 0:
-                f.write('\n')
-            else:
-                f.write(',')
-            i += 1
-        f.write('\n' + 'N_L_S_COUNT: %d' % N_LS_count +
-                ';  N_R_S_COUNT: %d' % N_RS_count + ' .\n')
-        f.write('\n' + 'N_L_F_COUNT: %d' % N_LF_count +
-                ';  N_R_F_COUNT: %d' % N_RF_count + ' .\n')
-        n1 = 0
-        n2 = 0
-        n3 = 0
-        n4 = 0
-        for r in range(0, len(Constants.stats.RESULT_DICT)):
-            if Constants.stats.RESULT_DICT[r].get('NARS_start_time:') != None and n1 == 0:
-                f.write('\n'+str(Constants.stats.RESULT_DICT[r]) + ' .\n')
-                n1 += 1
-            if Constants.stats.RESULT_DICT[r].get('Active>0.50_time:') != None and n2 == 0:
-                f.write('\n'+str(Constants.stats.RESULT_DICT[r]) + ' .\n')
-                n2 += 1
-            if Constants.stats.RESULT_DICT[r].get('Train_during_time:') != None and n3 == 0:
-                f.write('\n'+str(Constants.stats.RESULT_DICT[r]) + ' .\n')
-                n3 += 1
-            if Constants.stats.RESULT_DICT[r].get('Repeat_time:') != None and n4 == 0:
-                f.write('\n'+str(Constants.stats.RESULT_DICT[r]) + ' .\n')
-                n4 += 1
-        # f.write('\n')
-        # f.write('\n')
-        # for l in range(0,len(Constants.NARS_LINE)):
-        #     f.write(str(Constants.NARS_LINE[l]))
-        f.close()
+        with open(Constants.path.RESULT_PATH + Constants.stats.TXT_NAME, 'w') as f:
+            # 记录「操作-成败」
+            T_LS_count = 0
+            T_RS_count = 0
+            N_LS_count = 0
+            N_RS_count = 0
+            T_LF_count = 0
+            T_RF_count = 0
+            N_LF_count = 0
+            N_RF_count = 0
+            f.write('TRAIN_PROCESS:'+'\n')
+            for i in range(1, len(Constants.stats.TRAIN_PROCESS)+1):
+                f.write(Constants.stats.TRAIN_PROCESS[i-1])
+                if Constants.stats.TRAIN_PROCESS[i-1] == 'L_S':
+                    T_LS_count += 1
+                elif Constants.stats.TRAIN_PROCESS[i-1] == 'R_S':
+                    T_RS_count += 1
+                if Constants.stats.TRAIN_PROCESS[i-1] == 'L_F':
+                    T_LF_count += 1
+                elif Constants.stats.TRAIN_PROCESS[i-1] == 'R_F':
+                    T_RF_count += 1
+                if i % 10 == 0:
+                    f.write('\n')
+                else:
+                    f.write(',')
+                i += 1
+            f.write('\n' + 'T_L_S_COUNT: %d' % T_LS_count +
+                    ';  T_R_S_COUNT: %d' % T_RS_count + ' .\n')
+            f.write('\n' + 'T_L_F_COUNT: %d' % T_LF_count +
+                    ';  T_R_F_COUNT: %d' % T_RF_count + ' .\n')
+            f.write('\n')
+            # 记录「NARS操作」
+            f.write('NARS_PROCESS:'+'\n')
+            for i in range(1, len(Constants.stats.NARS_PROCESS)+1):
+                f.write(Constants.stats.NARS_PROCESS[i-1])
+                if Constants.stats.NARS_PROCESS[i-1] == 'L_S':
+                    N_LS_count += 1
+                elif Constants.stats.NARS_PROCESS[i-1] == 'R_S':
+                    N_RS_count += 1
+                if Constants.stats.NARS_PROCESS[i-1] == 'L_F':
+                    N_LF_count += 1
+                elif Constants.stats.NARS_PROCESS[i-1] == 'R_F':
+                    N_RF_count += 1
+                if i % 10 == 0:
+                    f.write('\n')
+                else:
+                    f.write(',')
+                i += 1
+            f.write('\n' + 'N_L_S_COUNT: %d' % N_LS_count +
+                    ';  N_R_S_COUNT: %d' % N_RS_count + ' .\n')
+            f.write('\n' + 'N_L_F_COUNT: %d' % N_LF_count +
+                    ';  N_R_F_COUNT: %d' % N_RF_count + ' .\n')
+            n1 = 0
+            n2 = 0
+            n3 = 0
+            n4 = 0
+            for r in range(0, len(Constants.stats.RESULT_DICT)):
+                if Constants.stats.RESULT_DICT[r].get('NARS_start_time:') != None and n1 == 0:
+                    f.write('\n'+str(Constants.stats.RESULT_DICT[r]) + ' .\n')
+                    n1 += 1
+                if Constants.stats.RESULT_DICT[r].get('Active>0.50_time:') != None and n2 == 0:
+                    f.write('\n'+str(Constants.stats.RESULT_DICT[r]) + ' .\n')
+                    n2 += 1
+                if Constants.stats.RESULT_DICT[r].get('Train_during_time:') != None and n3 == 0:
+                    f.write('\n'+str(Constants.stats.RESULT_DICT[r]) + ' .\n')
+                    n3 += 1
+                if Constants.stats.RESULT_DICT[r].get('Repeat_time:') != None and n4 == 0:
+                    f.write('\n'+str(Constants.stats.RESULT_DICT[r]) + ' .\n')
+                    n4 += 1
+            # f.write('\n')
+            # f.write('\n')
+            # for l in range(0,len(Constants.stats.NARS_LINE)):
+            #     f.write(str(Constants.stats.NARS_LINE[l]))
 
     def visdom_data(self):
         "将数据实时传入visdom进行曲线绘制"
@@ -862,7 +901,7 @@ class Game:
             executables_path=Constants.path.EXECUTABLE_PATH
         )
         self.NARS.put('<{SELF} --> [safe] >! :|:')
-        self.NARS.put('<{lsensor, rsensor} --> {SELF} >. :|:')
+        self.NARS.put('<{l_sensor, r_sensor} --> {SELF} >. :|:')
         time.sleep(3)
 
         self.screen.fill(Constants.display.WHITE)
@@ -906,7 +945,8 @@ class Game:
                         self.wall_2.__init__()
                     # 空格⇒暂停
                     if event.key == pygame.K_SPACE:
-                        pygame.mixer.Sound("ding.wav").play()
+                        pygame.mixer.Sound(
+                            Constants.path.ASSETS_PATH + "ding.wav").play()
                         self.pause()
                 # 随机babble⇒NARS Babble
                 if event.type == Constants.game.RANDOM_BABBLE_EVENT:
@@ -929,7 +969,7 @@ class Game:
         # 启动nars并输入常识
         self.launch_nars("opennars")
         self.NARS.put('<{SELF} --> [safe] >! :|:')
-        self.NARS.put('<{lsensor, rsensor} --> {SELF} >. :|:')
+        self.NARS.put('<{l_sensor, r_sensor} --> {SELF} >. :|:')
         time.sleep(3)
 
         # pygame环境初始化
