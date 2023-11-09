@@ -1,0 +1,15 @@
+# Default ignored files
+/shelf/
+/workspace.xml
+
+# 缓存文件
+*/__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.egg-info
+*.egg
+*.egg-link
+*.whl
+
+/venv/
