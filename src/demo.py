@@ -1,10 +1,6 @@
 import random
-import subprocess
-import signal
 import sys
-import threading
 import time
-import socket
 from visdom import Visdom
 import numpy as np
 from typing import Container, Tuple, Any, Optional, List
@@ -14,6 +10,8 @@ from openpyxl import load_workbook
 import pygame
 import pygame_menu
 from os import getcwd
+
+from Interface import NARSImplementation
 
 # 存放常量
 
@@ -271,83 +269,48 @@ class Game:
         self.datas = []  # 用于结果存入excel
         self.train_process_str = ''
 
-    def launch_thread(self):
-        "开一个并行线程，负责读取nars的输出"
-        self.read_line_thread = threading.Thread(target=self.read_operation,
-                                                 args=(self.process.stdout,))
-        self.read_line_thread.daemon = True
-        self.read_line_thread.start()
+    def on_NARS_output(self, line):
+        "在NARS有输出时触发"
+        # 加入历史，打印
+        Constants.stats.NARS_LINE.append(line)
+        print(line)
 
-    def launch_nars(self, nars_type):
-        "连接nars"
-        self.process = subprocess.Popen(["cmd"], bufsize=1,
-                                        stdin=subprocess.PIPE,
-                                        stdout=subprocess.PIPE,
-                                        universal_newlines=True,
-                                        shell=False)
-        # 先找到可执行文件目录
-        self.send_to_nars(f'cd {Constants.path.EXECUTABLE_PATH}')
-        # 然后用命令行启动NARS
-        if nars_type == "opennars":
-            self.send_to_nars('java -cp "*" org.opennars.main.Shell')
-        elif nars_type == 'ONA':
-            self.send_to_nars('NAR shell')
-        elif nars_type == "xiangnars":
-            self.send_to_nars('java -cp "*" nars.main_nogui.Shell')
-        self.send_to_nars('*volume=0')
-        self.launch_thread()
-
-    def process_kill(self):
-        "结束进程"
-        self.process.send_signal(signal.CTRL_C_EVENT)
-        self.process.terminate()
-
-    def send_to_nars(self, str):
-        "给nars传入信息"
-        self.process.stdin.write(str + '\n')
-        self.process.stdin.flush()
-
-    def read_operation(self, out):
-        "读取NARS的操作信息"
-        for line in iter(out.readline, b'\n'):  # get operations
-            Constants.stats.NARS_LINE.append(line)
-            print(line)
-            if line[0:3] == 'EXE':
-                subline = line.split(' ', 2)[2]
-                operation = subline.split('(', 1)[0]
-                print(operation)
-                if Constants.temp.RUN_OP_FLAG == True:
-                    if operation == '^left':
-                        Constants.temp.OP_SIGNAL = True
-                        self.condition_judge('left')
-                        self.move_left()
-                        Constants.stats.NARS_OP_TIMES += 1
-                        Constants.temp.OP_SIGNAL = False
-                    if operation == '^right':
-                        Constants.temp.OP_SIGNAL = True
-                        self.condition_judge('right')
-                        self.move_right()
-                        Constants.stats.NARS_OP_TIMES += 1
-                        Constants.temp.OP_SIGNAL = False
-        out.close()
+    def on_NARS_operation(self, operator):
+        "在NARS有输出时触发"
+        print(operator)
+        if Constants.temp.RUN_OP_FLAG == True:
+            # 操作：左移
+            if operator == '^left':
+                Constants.temp.OP_SIGNAL = True
+                self.condition_judge('left')
+                self.move_left()
+                Constants.stats.NARS_OP_TIMES += 1
+                Constants.temp.OP_SIGNAL = False
+            # 操作：右移
+            if operator == '^right':
+                Constants.temp.OP_SIGNAL = True
+                self.condition_judge('right')
+                self.move_right()
+                Constants.stats.NARS_OP_TIMES += 1
+                Constants.temp.OP_SIGNAL = False
 
     def getSensor(self):
-        "小车获取当前位置--获取感知信息"
+        "小车获取当前位置--获取感知信息"  # TODO: 或许这个也要和论文所说一样，纳入「接口」模块中
         # print('lsensor:' + str(self.car.rect.x - self.wall_1.rect.x + Constants.WALL_WIDTH))
         # print('rsensor:' + str(self.wall_2.rect.x - self.car.rect.x - Constants.CAR_WIDTH))
         # print('#########################')
         # print('lsensor_n:' + str(self.car.rect.x - Constants.WALL_WIDTH - Constants.LEFT_GAP_DISTANCE))
         # print('rsensor_n:' + str(Constants.SCREEN_WIDTH - self.car.rect.x - Constants.CAR_WIDTH - Constants.WALL_WIDTH - Constants.RIGHT_GAP_DISTANCE))
-        self.send_to_nars("<{lsensor} --> [" + str(self.car.rect.x - Constants.display.WALL_WIDTH -
-                          Constants.display.LEFT_GAP_DISTANCE) + "]>. :|:")  # 告知NARS现在左侧的位置
-        self.send_to_nars("<{rsensor} --> [" + str(Constants.display.SCREEN_WIDTH - self.car.rect.x - Constants.display.CAR_WIDTH -
-                          Constants.display.WALL_WIDTH - Constants.display.RIGHT_GAP_DISTANCE) + "]>. :|:")  # 告知NARS现在右侧的位置
+        self.NARS.put("<{lsensor} --> [" + str(self.car.rect.x - Constants.display.WALL_WIDTH -
+                                               Constants.display.LEFT_GAP_DISTANCE) + "]>. :|:")  # 告知NARS现在左侧的位置
+        self.NARS.put("<{rsensor} --> [" + str(Constants.display.SCREEN_WIDTH - self.car.rect.x - Constants.display.CAR_WIDTH -
+                                               Constants.display.WALL_WIDTH - Constants.display.RIGHT_GAP_DISTANCE) + "]>. :|:")  # 告知NARS现在右侧的位置
 
     def move_left(self):
         "左移运动"
         # 精神运动
         self.getSensor()
-        self.send_to_nars("<(*, {SELF}) --> ^left>. :|:")
+        self.NARS.put("<(*, {SELF}) --> ^left>. :|:")
         # 这里也许有推理时间
         if self.car.rect.x - Constants.display.MOVE_DISTANCE < (Constants.display.WALL_WIDTH+Constants.display.LEFT_GAP_DISTANCE):
             # 物理运动
@@ -356,21 +319,21 @@ class Game:
             # 感知变化
             self.getSensor()
             # 结果
-            self.send_to_nars("<{SELF} --> [safe]>. :|: %0% ")
+            self.NARS.put("<{SELF} --> [safe]>. :|: %0% ")
         else:
             # 物理运动
             self.car.rect.x -= Constants.display.MOVE_DISTANCE
             # 感知变化
             self.getSensor()
             # 结果
-            self.send_to_nars("<{SELF} --> [safe]>. :|:")
+            self.NARS.put("<{SELF} --> [safe]>. :|:")
         self.visdom_data()
 
     def move_right(self):
-        "右移运动"
+        "右移运动"  # TODO: 把这些NARS输入整合进一个「NAL模板」中，不要那么零散，比如'put_operation','put_sense', 'put_goal'。。。
         # 运动发生
         self.getSensor()
-        self.send_to_nars("<(*, {SELF}) --> ^right>. :|:")
+        self.NARS.put("<(*, {SELF}) --> ^right>. :|:")
         if self.car.rect.x + Constants.display.MOVE_DISTANCE > Constants.display.SCREEN_WIDTH-Constants.display.WALL_WIDTH-Constants.display.CAR_WIDTH-Constants.display.LEFT_GAP_DISTANCE:
             # 物理运动
             self.car.rect.x = Constants.display.SCREEN_WIDTH-Constants.display.WALL_WIDTH - \
@@ -378,13 +341,13 @@ class Game:
             # 感知变化
             self.getSensor()
             # 运动发生引发感知变化的结果
-            self.send_to_nars("<{SELF} --> [safe]>. :|: %0% ")
+            self.NARS.put("<{SELF} --> [safe]>. :|: %0% ")
         else:
             self.car.rect.x += Constants.display.MOVE_DISTANCE
             # 感知变化
             self.getSensor()
             # 引发结果
-            self.send_to_nars("<{SELF} --> [safe]>. :|: ")
+            self.NARS.put("<{SELF} --> [safe]>. :|: ")
         self.visdom_data()
 
     def condition_judge(self, key_value):
@@ -890,9 +853,16 @@ class Game:
         print("random_babble")
 
         # 启动nars并输入常识
-        self.launch_nars("opennars")
-        self.send_to_nars('<{SELF} --> [safe] >! :|:')
-        self.send_to_nars('<{lsensor, rsensor} --> {SELF} >. :|:')
+        self.NARS = NARSImplementation(
+            output_hook=self.on_NARS_output,  # 输出钩子
+            operation_hook=self.on_NARS_operation,  # 操作钩子
+        )
+        self.NARS.launch(
+            nars_type="opennars",
+            executables_path=Constants.path.EXECUTABLE_PATH
+        )
+        self.NARS.put('<{SELF} --> [safe] >! :|:')
+        self.NARS.put('<{lsensor, rsensor} --> {SELF} >. :|:')
         time.sleep(3)
 
         self.screen.fill(Constants.display.WHITE)
@@ -917,7 +887,7 @@ class Game:
                     sys.exit()
                 # 发送目标事件
                 if event.type == Constants.game.SEND_GOAL_EVENT:
-                    self.send_to_nars('<{SELF} --> [safe]>! :|:')
+                    self.NARS.put('<{SELF} --> [safe]>! :|:')
                 if event.type == Constants.game.PAUSE_GAME_EVENT:
                     pygame.mixer.Sound(
                         Constants.path.ASSETS_PATH + "ding.wav").play()
@@ -958,8 +928,8 @@ class Game:
 
         # 启动nars并输入常识
         self.launch_nars("opennars")
-        self.send_to_nars('<{SELF} --> [safe] >! :|:')
-        self.send_to_nars('<{lsensor, rsensor} --> {SELF} >. :|:')
+        self.NARS.put('<{SELF} --> [safe] >! :|:')
+        self.NARS.put('<{lsensor, rsensor} --> {SELF} >. :|:')
         time.sleep(3)
 
         # pygame环境初始化
@@ -983,7 +953,7 @@ class Game:
                     pygame.quit()
                     sys.exit()
                 if event.type == Constants.game.SEND_GOAL_EVENT:
-                    self.send_to_nars('<{SELF} --> [safe]>! :|:')
+                    self.NARS.put('<{SELF} --> [safe]>! :|:')
                 if event.type == Constants.game.PAUSE_GAME_EVENT:
                     pygame.mixer.Sound(
                         Constants.path.ASSETS_PATH + "ding.wav").play()
