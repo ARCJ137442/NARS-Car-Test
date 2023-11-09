@@ -86,7 +86,16 @@ class NARS:
         self.process.stdin.flush()
 
 
-if __name__ == '__main__':
-    nars = NARS('127.0.0.1', 8888,
-                launch_cmd=get_jar_launch_cmd('opennars1.jar'))
+def main(host, port, launch_cmd):
+    nars = NARS(host, port,
+                launch_cmd=launch_cmd)
     nars.launch_sever()
+    print('NARS服务器已于')
+
+
+if __name__ == '__main__':
+    main(
+        host='127.0.0.1',
+        port=8888,
+        launch_cmd=get_jar_launch_cmd('opennars1.jar')
+    )
