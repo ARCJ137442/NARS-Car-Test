@@ -101,6 +101,11 @@ class NARSImplementation:
                 operator = content.split('(', 1)[0]
                 # 调用钩子
                 self.operation_hook(operator)
+                '''原文参考
+                与此同时，接口模块也持续监听来自OpenNARS内部的输出操作，
+                从输出信息流中筛选并提取由SELF发出的左、右运动信息，
+                再将其转写为虚拟环境中小车的移动指令，
+                '''
         # 关闭输出流
         out.close()
 
@@ -138,7 +143,7 @@ class NARSImplementation:
         self._put(f"<{self.SELF} --> [{status_goal_name}]>! :|:")
 
     def add_self_sensor_existence(self, *sensor_names):
-        '''告诉NARS现在的「自我感受器」
+        '''让NARS在主观上知晓「自身有某些感受器」
         # * NARS语句模板: <{感受器名称...} --> {SELF}>. :|:
           * 其中`:|:`代指时态「当前」
         '''

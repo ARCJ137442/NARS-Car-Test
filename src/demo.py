@@ -14,7 +14,7 @@ import pygame
 import pygame_menu
 from os import getcwd
 
-from Interface_n import NARSImplementation
+from Interface import NARSImplementation
 
 # 存放常量
 
@@ -315,8 +315,13 @@ class Game:
                 Constants.stats.NARS_OP_TIMES += 1
                 Constants.temp.OP_SIGNAL = False
 
-    def getSensor(self):
-        "小车获取当前位置--获取感知信息"  # TODO: 或许这个也要和论文所说一样，纳入「接口」模块中
+    def getSense(self):
+        '''小车获取当前位置--获取感知信息
+        原文参考：
+        接口模块负责持续监听传感器产生的距离信息，将其装配成合法纳思语后单向送入OpenNARS，例如：“< {lsensor} → [50] >.”
+        
+        # !【2023-11-10 14:21:26】目前的「感知」仍然保留在`Game`模块中，因为其数据仍然需要从`Game`模块中获取。
+        '''  # TODO: 或许这个也要和论文所说一样，纳入「接口」模块中
         # print('l_sensor:' + str(self.car.rect.x - self.wall_1.rect.x + Constants.WALL_WIDTH))
         # print('r_sensor:' + str(self.wall_2.rect.x - self.car.rect.x - Constants.CAR_WIDTH))
         # print('#########################')
@@ -332,7 +337,7 @@ class Game:
     def move_left(self):
         "左移运动"
         # 精神运动
-        self.getSensor()
+        self.getSense()
         self.NARS.add_operation_experience('left', self.NARS.SELF)
         # 这里也许有推理时间
         if self.car.rect.x - Constants.display.MOVE_DISTANCE < (Constants.display.WALL_WIDTH+Constants.display.LEFT_GAP_DISTANCE):
@@ -340,14 +345,14 @@ class Game:
             self.car.rect.x = Constants.display.WALL_WIDTH + \
                 Constants.display.LEFT_GAP_DISTANCE
             # 感知变化
-            self.getSensor()
+            self.getSense()
             # 结果
             self.NARS.add_self_status('safe', True)  # 负反馈
         else:
             # 物理运动
             self.car.rect.x -= Constants.display.MOVE_DISTANCE
             # 感知变化
-            self.getSensor()
+            self.getSense()
             # 结果
             self.NARS.add_self_status('safe', False)  # 正反馈
         # 数据显示
@@ -356,20 +361,20 @@ class Game:
     def move_right(self):
         "右移运动"
         # 运动发生
-        self.getSensor()
+        self.getSense()
         self.NARS.add_operation_experience('right', self.NARS.SELF)
         if self.car.rect.x + Constants.display.MOVE_DISTANCE > Constants.display.SCREEN_WIDTH-Constants.display.WALL_WIDTH-Constants.display.CAR_WIDTH-Constants.display.LEFT_GAP_DISTANCE:
             # 物理运动
             self.car.rect.x = Constants.display.SCREEN_WIDTH-Constants.display.WALL_WIDTH - \
                 Constants.display.CAR_WIDTH-Constants.display.LEFT_GAP_DISTANCE
             # 感知变化
-            self.getSensor()
+            self.getSense()
             # 运动发生引发感知变化的结果
             self.NARS.add_self_status('safe', True)  # 负反馈
         else:
             self.car.rect.x += Constants.display.MOVE_DISTANCE
             # 感知变化
-            self.getSensor()
+            self.getSense()
             # 引发结果
             self.NARS.add_self_status('safe', False)  # 正反馈
         # 数据显示
@@ -737,16 +742,16 @@ class Game:
         while self.is_pause == True:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    pygame.quit()
-                    quit()
+                    # ! 暂停时退出，也要保存
+                    self.save_and_quit()
                 if event.type == Constants.game.PAUSE_GAME_EVENT:
                     self.is_pause = False
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_SPACE:
                         self.is_pause = False
                     elif event.key == pygame.K_q:
-                        pygame.quit()
-                        quit()
+                        # ! 暂停时退出，也要保存
+                        self.save_and_quit()
         pygame.display.update()
         self.clock.tick(5)
 
@@ -1009,8 +1014,22 @@ class Game:
             executables_path=Constants.path.EXECUTABLE_PATH
         )
         self.NARS.add_self_status_goal('safe')  # 告知「目标是安全」
+        '''原文参考
+        系统输入的原初目标为“< SELF —> [safe] >.”，目的是保持自身的安全状态。
+        '''
         self.NARS.add_self_sensor_existence(
             'l_sensor', 'r_sensor')  # 告知「自己有左、右传感器」
+        '''原文参考
+        感觉信息由小车左、右两个传感器{lsensor}与{rsensor}产生，
+        并与SELF建立联结：“<SELF —> {lsensor}>.” “< SELF —> {rsensor}>.”，
+        这能让OpenNARS在主观上知晓自身有两个感觉“器官”。
+        
+        # ! 代码相对原论文的不同点：
+        # ! 在实际纳思语的表达中，
+        # !     一是其顺序相反——但在逻辑上不影响：即有`<{A} --> {B}>`⇔`<{B} --> {A}>`
+        # !     二是两句「自身有感官」可以被合并，即
+        # ! 「传感器名称」在「l/r」和「sensor」之间添加了下划线，以便阅者区分
+        '''
 
     def init_pygame(self):
         '''pygame环境初始化'''
@@ -1020,6 +1039,16 @@ class Game:
         self.clock = pygame.time.Clock()
         self.__set_timer()
         self.start_time = pygame.time.get_ticks()
+        
+    def init_menu(self):
+        '''构建主菜单'''
+        self.screen.fill(Constants.display.WHITE)
+
+        self.menu = pygame_menu.Menu('Choose Module', Constants.display.MENU_WIDTH, Constants.display.MENU_HEIGHT,
+                                     theme=pygame_menu.themes.THEME_DARK)
+        self.b_b = self.menu.add.button('Random Babble', self.random_babble)
+        self.menu.add.button('Human Train', self.human_train)
+        self.menu.add.button('Quit', pygame_menu.events.EXIT)
 
     def on_common_event(self, event):
         '''pygame中「随机Babble」「人为训练」共用的事件处理
@@ -1069,13 +1098,8 @@ class Game:
 
     def run(self):
         "负责游戏的运行--主控制"
-        self.screen.fill(Constants.display.WHITE)
-
-        self.menu = pygame_menu.Menu('Choose Module', Constants.display.MENU_WIDTH, Constants.display.MENU_HEIGHT,
-                                     theme=pygame_menu.themes.THEME_DARK)
-        self.b_b = self.menu.add.button('Random Babble', self.random_babble)
-        self.menu.add.button('Human Train', self.human_train)
-        self.menu.add.button('Quit', pygame_menu.events.EXIT)
+        # 构建主菜单
+        self.init_menu()
         # 游戏大循环
         while True:
             events = pygame.event.get()
