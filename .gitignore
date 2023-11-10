@@ -12,4 +12,16 @@
 *.egg-link
 *.whl
 
+# 外部库（推荐自行安装）
 /venv/
+
+# 日志&临时数据
+result/
+
+# 所有弃用的文件/文件夹
+*\[deprecated\]*
+
+# 工作区配置文件
+.dist/
+.idea/
+.vscode/
