@@ -13,16 +13,36 @@ import socket
 
 class NARSImplementation:
     """NARS实现
-    控制NARS的计算机实现
-    实质上就是命令行读写
+    - 控制NARS的计算机实现
+        - 实质上就是命令行读写
+    - 将「感知」「操作」转换成纳思语
     """
+
+    # * 常量集合 * #
+
+    DEFAULT_SELF = '{SELF}'
+    "默认用于表示「自我」的词项（用于纳思语表示）"
+
+    NARS_LAUNCH_CMD_DICT = {
+        "opennars": 'java -cp "*" org.opennars.main.Shell',
+        "ONA": "NAR shell",
+        "xiangnars": 'java -cp "*" nars.main_nogui.Shell'
+    }
+    "NARS启动命令字典，用于统一管理启动命令"
+
+    # * 计算机实现对接 * #
 
     def __init__(self, output_hook, operation_hook) -> None:
         "构造函数"
+
         self.output_hook = output_hook
         "截获输出的钩子函数（优先触发，在NARS有输出时调用，传入输出的内容如'EXE: $0.04;0.00;0.08$ ^left([{SELF}])=null'）"
+
         self.operation_hook = operation_hook
         "截获NARS操作的钩子函数（在NARS输出操作时调用，传入操作的操作符如'^left'）"
+
+        self.SELF = NARSImplementation.DEFAULT_SELF
+        "表示「自我」的词项（用于纳思语表示）"
 
     def _launch_thread(self):
         "开一个并行线程，负责读取nars的输出"
@@ -47,15 +67,12 @@ class NARSImplementation:
                                         universal_newlines=True,
                                         shell=False)
         # 先找到可执行文件目录
-        self.put(f'cd {executables_path}')
+        self._put(f'cd {executables_path}')
         # 然后用命令行启动NARS
-        if nars_type == "opennars":
-            self.put('java -cp "*" org.opennars.main.Shell')
-        elif nars_type == 'ONA':
-            self.put('NAR shell')
-        elif nars_type == "xiangnars":
-            self.put('java -cp "*" nars.main_nogui.Shell')
-        self.put('*volume=0')
+        self._put(NARSImplementation.NARS_LAUNCH_CMD_DICT[nars_type])
+        # 降低音量
+        self._put('*volume=0')
+        # 启动NARS线程
         self._launch_thread()
 
     def process_kill(self):
@@ -63,7 +80,7 @@ class NARSImplementation:
         self.process.send_signal(signal.CTRL_C_EVENT)
         self.process.terminate()
 
-    def put(self, str):
+    def _put(self, str):
         "给nars传入信息"
         self.process.stdin.write(str + '\n')
         self.process.stdin.flush()
@@ -86,3 +103,43 @@ class NARSImplementation:
                 self.operation_hook(operator)
         # 关闭输出流
         out.close()
+
+    # * 纳思语对接 * #
+    def add_sense(self, sensor_name, status_name):
+        '''告诉NARS现在指定感受器的状态
+        # * NARS语句模板: <{感受器名} --> [状态名]>. :|:
+          * 其中`:|:`代指时态「当前」
+        '''
+        self._put(f"<{'{' + sensor_name + '}'} --> [{status_name}]>. :|:")
+
+    def add_operation_experience(self, operator_name, *operation_args):
+        '''告诉NARS现在执行的操作
+        # * NARS语句模板: <(*, {SELF}) --> 操作符>. :|:
+          * 其中`:|:`代指时态「当前」
+        '''
+        self._put(
+            f"<(*, {', '.join(operation_args)}) --> ^{operator_name}>. :|:")
+
+    def add_self_status(self, status_name, is_negative):
+        '''告诉NARS现在的「自我状态」
+        # * NARS语句模板/正面: <{SELF} --> [状态名]>. :|:
+        # * NARS语句模板/负面: <{SELF} --> [状态名]>. :|: %0%
+          * 其中`:|:`代指时态「当前」
+        '''
+        self._put(
+            f"<{self.SELF} --> [{status_name}]>. :|:" + (
+                ' %0%' if is_negative else ''))  # ! 注意运算符优先级
+
+    def add_self_status_goal(self, status_goal_name):
+        '''告诉NARS现在的「自我状态目标」
+        # * NARS语句模板: <{SELF} --> [状态名]>! :|:
+          * 其中`:|:`代指时态「当前」
+        '''
+        self._put(f"<{self.SELF} --> [{status_goal_name}]>! :|:")
+
+    def add_self_sensor_existence(self, *sensor_names):
+        '''告诉NARS现在的「自我感受器」
+        # * NARS语句模板: <{感受器名称...} --> {SELF}>. :|:
+          * 其中`:|:`代指时态「当前」
+        '''
+        self._put(f"<{'{'+', '.join(sensor_names)+'}'} --> {self.SELF}>. :|:")

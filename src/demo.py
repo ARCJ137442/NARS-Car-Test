@@ -14,7 +14,7 @@ import pygame
 import pygame_menu
 from os import getcwd
 
-from Interface import NARSImplementation
+from Interface_n import NARSImplementation
 
 # 存放常量
 
@@ -107,7 +107,7 @@ class Constants:
 
         # 结果字典
         RESULT_DICT = []
-        # Nars过程数组
+        # NARS过程数组
         NARS_LINE = []
 
         # ! 「结果保存位置」已迁移至path
@@ -154,9 +154,19 @@ class Constants:
 
         # 序列输入人为操作以便控制人为操作的内容和频率，所以自定义事件完成
         GIVEN_HUMAN_TRAIN_EVENT = pygame.USEREVENT + 5
-        # 人为操作内容:left=1,right=2。全成功（1，2，2，1）；全失败（1，1，1）；失败成功参半（1，1，2）。
-        # GIVEN_HUMAN_TRAIN_CONTENT = [1,2,1,2,1,2,1,2,1,2,1,2]
-        GIVEN_HUMAN_TRAIN_CONTENT = [1, 1, 1, 1, 1, 1]
+        GIVEN_HUMAN_TRAIN_CONTENT = (
+            (print('人为操作内容：全失败！'), [1, 1, 1, 1, 1, 1])[1]
+            if random.random() > 0.5 else
+            (print('人为操作内容：全成功！'), [1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2])[1])
+        '''人为操作内容
+        - 数字⇒操作：left=1,right=2
+        - 参考序列：
+            - 全成功: [1, 2, 2, 1]
+            - 全失败: [1, 1, 1]
+            - 失败成功参半: [1, 1, 2]
+        
+        # !【2023-11-10 13:12:38】现在随机选择人为操作内容
+        '''
         GIVEN_HUMAN_TRAIN_EVENT_TIME = 1.5*1000
 
     class temp:
@@ -164,7 +174,7 @@ class Constants:
         # 训练传入操作的信号
         TRAIN_SIGNAL = False
 
-        # nars传入操作的信号
+        # NARS传入操作的信号
         OP_SIGNAL = False
 
         # 是否允许NARS操作小车
@@ -222,10 +232,10 @@ class Car(pygame.sprite.Sprite):
     def move(self):
         pass
 
-# 游戏类
-
 
 class Game:
+    "游戏类"  # TODO: 或许需要再把「游戏」和「主体」分离，把「小车」单独作一个类
+
     def __init__(self):
         "游戏的初始化方法，主要负责游戏前的准备工作"
 
@@ -312,16 +322,18 @@ class Game:
         # print('#########################')
         # print('l_sensor_n:' + str(self.car.rect.x - Constants.WALL_WIDTH - Constants.LEFT_GAP_DISTANCE))
         # print('r_sensor_n:' + str(Constants.SCREEN_WIDTH - self.car.rect.x - Constants.CAR_WIDTH - Constants.WALL_WIDTH - Constants.RIGHT_GAP_DISTANCE))
-        self.NARS.put("<{l_sensor} --> [" + str(self.car.rect.x - Constants.display.WALL_WIDTH -
-                                                Constants.display.LEFT_GAP_DISTANCE) + "]>. :|:")  # 告知NARS现在左侧的位置
-        self.NARS.put("<{r_sensor} --> [" + str(Constants.display.SCREEN_WIDTH - self.car.rect.x - Constants.display.CAR_WIDTH -
-                                                Constants.display.WALL_WIDTH - Constants.display.RIGHT_GAP_DISTANCE) + "]>. :|:")  # 告知NARS现在右侧的位置
+        self.NARS.add_sense('l_sensor',  # 告知NARS现在左侧的位置
+                            str(self.car.rect.x - Constants.display.WALL_WIDTH -
+                                Constants.display.LEFT_GAP_DISTANCE))
+        self.NARS.add_sense('r_sensor',  # 告知NARS现在右侧的位置
+                            str(Constants.display.SCREEN_WIDTH - self.car.rect.x - Constants.display.CAR_WIDTH -
+                                Constants.display.WALL_WIDTH - Constants.display.RIGHT_GAP_DISTANCE))
 
     def move_left(self):
         "左移运动"
         # 精神运动
         self.getSensor()
-        self.NARS.put("<(*, {SELF}) --> ^left>. :|:")
+        self.NARS.add_operation_experience('left', self.NARS.SELF)
         # 这里也许有推理时间
         if self.car.rect.x - Constants.display.MOVE_DISTANCE < (Constants.display.WALL_WIDTH+Constants.display.LEFT_GAP_DISTANCE):
             # 物理运动
@@ -330,21 +342,22 @@ class Game:
             # 感知变化
             self.getSensor()
             # 结果
-            self.NARS.put("<{SELF} --> [safe]>. :|: %0% ")
+            self.NARS.add_self_status('safe', True)  # 负反馈
         else:
             # 物理运动
             self.car.rect.x -= Constants.display.MOVE_DISTANCE
             # 感知变化
             self.getSensor()
             # 结果
-            self.NARS.put("<{SELF} --> [safe]>. :|:")
+            self.NARS.add_self_status('safe', False)  # 正反馈
+        # 数据显示
         self.visdom_data()
 
     def move_right(self):
-        "右移运动"  # TODO: 把这些NARS输入整合进一个「NAL模板」中，不要那么零散，比如'put_operation','put_sense', 'put_goal'。。。
+        "右移运动"
         # 运动发生
         self.getSensor()
-        self.NARS.put("<(*, {SELF}) --> ^right>. :|:")
+        self.NARS.add_operation_experience('right', self.NARS.SELF)
         if self.car.rect.x + Constants.display.MOVE_DISTANCE > Constants.display.SCREEN_WIDTH-Constants.display.WALL_WIDTH-Constants.display.CAR_WIDTH-Constants.display.LEFT_GAP_DISTANCE:
             # 物理运动
             self.car.rect.x = Constants.display.SCREEN_WIDTH-Constants.display.WALL_WIDTH - \
@@ -352,17 +365,21 @@ class Game:
             # 感知变化
             self.getSensor()
             # 运动发生引发感知变化的结果
-            self.NARS.put("<{SELF} --> [safe]>. :|: %0% ")
+            self.NARS.add_self_status('safe', True)  # 负反馈
         else:
             self.car.rect.x += Constants.display.MOVE_DISTANCE
             # 感知变化
             self.getSensor()
             # 引发结果
-            self.NARS.put("<{SELF} --> [safe]>. :|: ")
+            self.NARS.add_self_status('safe', False)  # 正反馈
+        # 数据显示
         self.visdom_data()
 
     def condition_judge(self, key_value):
-        "判断位于临界位置时操作发生的后果——成功/失败"
+        '''移动条件判断
+        判断位于临界位置时操作发生的后果——成功/失败
+        亦用于对小车行动的统计
+        '''
         print("------------------------")
         print(key_value)
         print(self.car.rect.x)
@@ -379,7 +396,7 @@ class Game:
         if Constants.stats.SUM_COUNT > 0:
             Constants.stats.SUCCESS_RATE = round(
                 Constants.stats.SUCCESS_COUNT/Constants.stats.SUM_COUNT, 2)
-        # 添加nars独自操作的成功率
+        # 添加NARS独自操作的成功率
         if Constants.temp.OP_SIGNAL == True:
             if self.car.rect.x == Constants.display.LEFT_CRITICAL_DISTANCE and key_value == 'left':
                 print("左侧NARS失败！")
@@ -583,7 +600,7 @@ class Game:
 
         self.print_process(Constants.stats.TRAIN_PROCESS, 70, 100)
 
-        nars_op = self.font.render(
+        NARS_op = self.font.render(
             'NARS次数: %d' % Constants.stats.NARS_OP_TIMES, True, Constants.display.BLACK)
         if Constants.stats.NARS_OP_TIMES == 1:
             Constants.stats.RESULT_DICT.append(
@@ -591,20 +608,20 @@ class Game:
         if Constants.stats.NARS_OP_TIMES > 0:
             Constants.stats.NARS_ACTIVATION = round(
                 Constants.stats.NARS_OP_TIMES/self.speeding_delta_time_s, 2)
-        nars_activation = self.font.render(
+        NARS_activation = self.font.render(
             'NARS活跃度: %.2f' % Constants.stats.NARS_ACTIVATION, True, Constants.display.BLACK)
         if Constants.stats.NARS_ACTIVATION == 0.50:
             Constants.stats.RESULT_DICT.append(
                 {'Active>0.50_time:': int(self.speeding_delta_time_s)})
-        nars_activation = self.font.render(
+        NARS_activation = self.font.render(
             'NARS活跃度: %.2f' % Constants.stats.NARS_ACTIVATION, True, Constants.display.BLACK)
-        nars_success_count = self.font.render(
+        NARS_success_count = self.font.render(
             'NARS成功次数：%d' % Constants.stats.NARS_SUCCESS_COUNT, True, Constants.display.BLACK)
-        nars_failure_count = self.font.render(
+        NARS_failure_count = self.font.render(
             'NARS失败次数：%d' % Constants.stats.NARS_FAILURE_COUNT, True, Constants.display.BLACK)
-        nars_sum_count = self.font.render(
+        NARS_sum_count = self.font.render(
             'NARS总次数：%d' % Constants.stats.NARS_SUM_COUNT, True, Constants.display.BLACK)
-        nars_success_rate = self.font.render(
+        NARS_success_rate = self.font.render(
             'NARS成功率：%.2f' % Constants.stats.NARS_SUCCESS_RATE, True, Constants.display.BLACK)
 
         self.print_process(Constants.stats.NARS_PROCESS, 70, 230)
@@ -626,12 +643,12 @@ class Game:
         self.screen.blit(train_sum_count, [320, 60])
         self.screen.blit(train_success_rate, [70, 80])
 
-        self.screen.blit(nars_op, [70, 170])
-        self.screen.blit(nars_activation, [320, 170])
-        self.screen.blit(nars_success_count, [70, 190])
-        self.screen.blit(nars_failure_count, [320, 190])
-        self.screen.blit(nars_sum_count, [70, 210])
-        self.screen.blit(nars_success_rate, [320, 210])
+        self.screen.blit(NARS_op, [70, 170])
+        self.screen.blit(NARS_activation, [320, 170])
+        self.screen.blit(NARS_success_count, [70, 190])
+        self.screen.blit(NARS_failure_count, [320, 190])
+        self.screen.blit(NARS_sum_count, [70, 210])
+        self.screen.blit(NARS_success_rate, [320, 210])
 
         self.screen.blit(success_count, [70, 300])
         self.screen.blit(failure_count, [320, 300])
@@ -660,7 +677,7 @@ class Game:
 
         self.print_process(Constants.stats.TRAIN_PROCESS, 70, 100)
 
-        nars_op = self.font.render(
+        NARS_op = self.font.render(
             'NARS次数: %d' % Constants.stats.NARS_OP_TIMES, True, Constants.display.BLACK)
         if Constants.stats.NARS_OP_TIMES == 1:
             Constants.stats.RESULT_DICT.append(
@@ -668,18 +685,18 @@ class Game:
         if Constants.stats.NARS_OP_TIMES > 0:
             Constants.stats.NARS_ACTIVATION = round(
                 Constants.stats.NARS_OP_TIMES/self.speeding_delta_time_s, 2)
-        nars_activation = self.font.render(
+        NARS_activation = self.font.render(
             'NARS活跃度: %.2f' % Constants.stats.NARS_ACTIVATION, True, Constants.display.BLACK)
         if Constants.stats.NARS_ACTIVATION == 0.50:
             Constants.stats.RESULT_DICT.append(
                 {'Active>0.50_time:': int(self.speeding_delta_time_s)})
-        nars_success_count = self.font.render(
+        NARS_success_count = self.font.render(
             'NARS成功次数：%d' % Constants.stats.NARS_SUCCESS_COUNT, True, Constants.display.BLACK)
-        nars_failure_count = self.font.render(
+        NARS_failure_count = self.font.render(
             'NARS失败次数：%d' % Constants.stats.NARS_FAILURE_COUNT, True, Constants.display.BLACK)
-        nars_sum_count = self.font.render(
+        NARS_sum_count = self.font.render(
             'NARS总次数：%d' % Constants.stats.NARS_SUM_COUNT, True, Constants.display.BLACK)
-        nars_success_rate = self.font.render(
+        NARS_success_rate = self.font.render(
             'NARS成功率：%.2f' % Constants.stats.NARS_SUCCESS_RATE, True, Constants.display.BLACK)
 
         self.print_process(Constants.stats.NARS_PROCESS, 70, 230)
@@ -701,12 +718,12 @@ class Game:
         self.screen.blit(train_sum_count, [320, 60])
         self.screen.blit(train_success_rate, [70, 80])
 
-        self.screen.blit(nars_op, [70, 170])
-        self.screen.blit(nars_activation, [320, 170])
-        self.screen.blit(nars_success_count, [70, 190])
-        self.screen.blit(nars_failure_count, [320, 190])
-        self.screen.blit(nars_sum_count, [70, 210])
-        self.screen.blit(nars_success_rate, [320, 210])
+        self.screen.blit(NARS_op, [70, 170])
+        self.screen.blit(NARS_activation, [320, 170])
+        self.screen.blit(NARS_success_count, [70, 190])
+        self.screen.blit(NARS_failure_count, [320, 190])
+        self.screen.blit(NARS_sum_count, [70, 210])
+        self.screen.blit(NARS_success_rate, [320, 210])
 
         self.screen.blit(success_count, [70, 300])
         self.screen.blit(failure_count, [320, 300])
@@ -733,13 +750,13 @@ class Game:
         pygame.display.update()
         self.clock.tick(5)
 
-    def write_data(self):  # TODO: 📌数据保存问题
+    def write_data(self):
         "将数据写入表格和txt文件"
-        print("enter in write_data")
+        print("write_data: 开始保存数据")
         self.write_excel()
-        print("数据EXCEL写入完毕！")
+        print("write_data: 数据EXCEL写入完毕！")
         self.write_process_txt()
-        print("经验txt保存完毕！")
+        print("write_data: 经验txt保存完毕！")
 
     def write_excel(self):
         "将数据写入表格"
@@ -758,7 +775,7 @@ class Game:
                 book = load_workbook(
                     Constants.path.RESULT_PATH + Constants.stats.EXCEL_NAME)
         except BaseException as e:
-            print('工作簿读取异常：', e.with_traceback(None) if e else e)
+            print('write_excel: 工作簿读取异常：', e.with_traceback(None) if e else e)
             book = writer.book
             '''
             根据新的错误信息,可以看到是在为ExcelWriter的book属性赋值时报错了,提示该属性不可设置。
@@ -891,25 +908,12 @@ class Game:
         "负责babble的主要控制"
         print("random_babble")
 
-        # 启动nars并输入常识
-        self.NARS = NARSImplementation(
-            output_hook=self.on_NARS_output,  # 输出钩子
-            operation_hook=self.on_NARS_operation,  # 操作钩子
-        )
-        self.NARS.launch(
-            nars_type="opennars",
-            executables_path=Constants.path.EXECUTABLE_PATH
-        )
-        self.NARS.put('<{SELF} --> [safe] >! :|:')
-        self.NARS.put('<{l_sensor, r_sensor} --> {SELF} >. :|:')
+        # 启动NARS并输入常识
+        self.init_NARS()
         time.sleep(3)
 
-        self.screen.fill(Constants.display.WHITE)
-        self.game_speed = 1
-        self.fps = 60 * self.game_speed
-        self.clock = pygame.time.Clock()
-        self.__set_timer()
-        self.start_time = pygame.time.get_ticks()
+        # pygame环境初始化
+        self.init_pygame()
 
         # 随机babble的循环
         while True:
@@ -918,36 +922,8 @@ class Game:
                 self.screen.blit(sprite.image, sprite.rect)
             # 进入事件判断
             for event in pygame.event.get():
-                # QUIT事件⇒写入数据 & 退出
-                if event.type == pygame.QUIT:
-                    print("写入数据_quit")
-                    self.write_data()
-                    pygame.quit()
-                    sys.exit()
-                # 发送目标事件
-                if event.type == Constants.game.SEND_GOAL_EVENT:
-                    self.NARS.put('<{SELF} --> [safe]>! :|:')
-                if event.type == Constants.game.PAUSE_GAME_EVENT:
-                    pygame.mixer.Sound(
-                        Constants.path.ASSETS_PATH + "ding.wav").play()
-                    self.pause()
-                if event.type == pygame.KEYDOWN:
-                    # C⇒移动墙壁
-                    if event.key == pygame.K_c:
-                        Constants.display.LEFT_GAP_DISTANCE -= 50
-                        Constants.display.RIGHT_GAP_DISTANCE -= 50
-                        Constants.display.LEFT_CRITICAL_DISTANCE = Constants.display.WALL_WIDTH + \
-                            Constants.display.LEFT_GAP_DISTANCE  # 200
-                        Constants.display.RIGHT_CRITICAL_DISTANCE = Constants.display.SCREEN_WIDTH - \
-                            (Constants.display.WALL_WIDTH + Constants.display.CAR_WIDTH +
-                             Constants.display.RIGHT_GAP_DISTANCE)  # 300
-                        self.wall_1.__init__()
-                        self.wall_2.__init__()
-                    # 空格⇒暂停
-                    if event.key == pygame.K_SPACE:
-                        pygame.mixer.Sound(
-                            Constants.path.ASSETS_PATH + "ding.wav").play()
-                        self.pause()
+                # 共用逻辑
+                self.on_common_event(event)
                 # 随机babble⇒NARS Babble
                 if event.type == Constants.game.RANDOM_BABBLE_EVENT:
                     if Constants.game.BABBLE_TIMES <= 0:
@@ -966,19 +942,12 @@ class Game:
         "负责人为键盘的主要控制"
         print("human_train")
 
-        # 启动nars并输入常识
-        self.launch_nars("opennars")
-        self.NARS.put('<{SELF} --> [safe] >! :|:')
-        self.NARS.put('<{l_sensor, r_sensor} --> {SELF} >. :|:')
+        # 启动NARS并输入常识
+        self.init_NARS()
         time.sleep(3)
 
         # pygame环境初始化
-        self.screen.fill(Constants.display.WHITE)
-        self.game_speed = 1
-        self.fps = 60 * self.game_speed
-        self.clock = pygame.time.Clock()
-        self.__set_timer()
-        self.start_time = pygame.time.get_ticks()
+        self.init_pygame()
 
         # 人为操作的循环
         while True:
@@ -987,17 +956,8 @@ class Game:
             for sprite in self.all_sprites:
                 self.screen.blit(sprite.image, sprite.rect)
             for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    print("写入数据")
-                    self.write_data()
-                    pygame.quit()
-                    sys.exit()
-                if event.type == Constants.game.SEND_GOAL_EVENT:
-                    self.NARS.put('<{SELF} --> [safe]>! :|:')
-                if event.type == Constants.game.PAUSE_GAME_EVENT:
-                    pygame.mixer.Sound(
-                        Constants.path.ASSETS_PATH + "ding.wav").play()
-                    self.pause()
+                # 共用逻辑
+                self.on_common_event(event)
                 # 按照写入的序列进行操作
                 if event.type == Constants.game.GIVEN_HUMAN_TRAIN_EVENT:
                     if Constants.stats.KEY_TIMES >= len(Constants.game.GIVEN_HUMAN_TRAIN_CONTENT):
@@ -1017,21 +977,7 @@ class Game:
                     if event.key == pygame.K_t:
                         Constants.stats.RESULT_DICT.append(
                             {'Train_during_time:': int(self.speeding_delta_time_s)})
-                    if event.key == pygame.K_SPACE:
-                        pygame.mixer.Sound(
-                            Constants.path.ASSETS_PATH + "ding.wav").play()
-                        self.pause()
-                    if event.key == pygame.K_c:
-                        Constants.display.LEFT_GAP_DISTANCE -= 50
-                        Constants.display.RIGHT_GAP_DISTANCE -= 50
-                        Constants.display.LEFT_CRITICAL_DISTANCE = Constants.display.WALL_WIDTH + \
-                            Constants.display.LEFT_GAP_DISTANCE  # 200
-                        Constants.display.RIGHT_CRITICAL_DISTANCE = Constants.display.SCREEN_WIDTH - \
-                            (Constants.display.WALL_WIDTH + Constants.display.CAR_WIDTH +
-                             Constants.display.RIGHT_GAP_DISTANCE)  # 300
-                        self.wall_1.__init__()
-                        self.wall_2.__init__()
-
+                    # 左右键盘控制小车
                     if event.key == pygame.K_LEFT:
                         Constants.temp.TRAIN_SIGNAL = True
                         Constants.stats.KEY_TIMES += 1
@@ -1049,6 +995,78 @@ class Game:
             pygame.display.update()
             self.clock.tick(self.fps)
 
+    def init_NARS(self):
+        '''初始化NARS，启动NARS并输入常识
+        - 初始化其目标
+        - 初始化其传感器
+        '''
+        self.NARS = NARSImplementation(
+            output_hook=self.on_NARS_output,  # 输出钩子
+            operation_hook=self.on_NARS_operation,  # 操作钩子
+        )
+        self.NARS.launch(
+            nars_type="opennars",
+            executables_path=Constants.path.EXECUTABLE_PATH
+        )
+        self.NARS.add_self_status_goal('safe')  # 告知「目标是安全」
+        self.NARS.add_self_sensor_existence(
+            'l_sensor', 'r_sensor')  # 告知「自己有左、右传感器」
+
+    def init_pygame(self):
+        '''pygame环境初始化'''
+        self.screen.fill(Constants.display.WHITE)
+        self.game_speed = 1
+        self.fps = 60 * self.game_speed
+        self.clock = pygame.time.Clock()
+        self.__set_timer()
+        self.start_time = pygame.time.get_ticks()
+
+    def on_common_event(self, event):
+        '''pygame中「随机Babble」「人为训练」共用的事件处理
+        - 退出
+        - 暂停游戏
+        - 发送目标
+        - 键盘按下C⇒移动墙壁
+        - 键盘按下空格⇒暂停
+        '''
+        # QUIT事件⇒写入数据 & 退出
+        if event.type == pygame.QUIT:
+            self.save_and_quit()
+        # 发送目标事件
+        if event.type == Constants.game.SEND_GOAL_EVENT:
+            self.NARS.add_self_status_goal('safe')
+        # 暂停游戏事件
+        if event.type == Constants.game.PAUSE_GAME_EVENT:
+            pygame.mixer.Sound(
+                Constants.path.ASSETS_PATH + "ding.wav").play()
+            self.pause()
+        if event.type == pygame.KEYDOWN:
+            # C⇒移动墙壁
+            if event.key == pygame.K_c:
+                Constants.display.LEFT_GAP_DISTANCE -= 50
+                Constants.display.RIGHT_GAP_DISTANCE -= 50
+                Constants.display.LEFT_CRITICAL_DISTANCE = Constants.display.WALL_WIDTH + \
+                    Constants.display.LEFT_GAP_DISTANCE  # 200
+                Constants.display.RIGHT_CRITICAL_DISTANCE = Constants.display.SCREEN_WIDTH - \
+                    (Constants.display.WALL_WIDTH + Constants.display.CAR_WIDTH +
+                     Constants.display.RIGHT_GAP_DISTANCE)  # 300
+                self.wall_1.__init__()
+                self.wall_2.__init__()
+            # 空格⇒暂停
+            if event.key == pygame.K_SPACE:
+                pygame.mixer.Sound(
+                    Constants.path.ASSETS_PATH + "ding.wav").play()
+                self.pause()
+
+    def save_and_quit(self):
+        '''当程序退出时
+        - 一般是在 pygame.QUIT 事件中调用
+        '''
+        print("写入数据_quit")
+        self.write_data()
+        pygame.quit()
+        sys.exit()
+
     def run(self):
         "负责游戏的运行--主控制"
         self.screen.fill(Constants.display.WHITE)
@@ -1064,7 +1082,7 @@ class Game:
             # 检测退出事件
             for event in events:
                 if event.type == pygame.QUIT:
-                    exit()
+                    exit()  # 直接退出
             # 根据事件更新
             if self.menu.is_enabled():
                 self.menu.update(events)

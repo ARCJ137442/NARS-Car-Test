@@ -1,0 +1,16 @@
+TRAIN_PROCESS:
+R_S,R_F,R_S,R_F,R_F,R_F,R_S,R_F,R_F,R_S
+L_S,R_S,R_S,R_S,
+T_L_S_COUNT: 1;  T_R_S_COUNT: 7 .
+
+T_L_F_COUNT: 0;  T_R_F_COUNT: 6 .
+
+NARS_PROCESS:
+R_F,R_S,R_F,R_F,R_F,R_S,R_F,R_F,R_S,L_S
+R_S,R_S,R_S,L_S,L_F,L_F,L_F,L_F,L_F,L_S
+L_F,L_F,L_F,L_F,
+N_L_S_COUNT: 3;  N_R_S_COUNT: 6 .
+
+N_L_F_COUNT: 9;  N_R_F_COUNT: 6 .
+
+{'NARS_start_time:': 13} .
