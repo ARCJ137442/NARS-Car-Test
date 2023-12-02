@@ -23,6 +23,11 @@ NARS小车碰撞实验 demo
     - visdom（数据可视化）
 3. 从`demo.py`中启动实验环境
 
+## 软件截图
+
+![image](https://github.com/ARCJ137442/NARS-Car-Test/assets/61109168/fc86220e-9cc0-4d88-8801-bce449572ef3)
+![image](https://github.com/ARCJ137442/NARS-Car-Test/assets/61109168/69248bf9-a41c-433b-a5f7-b071a09d5e8a)
+
 ## 相关项目
 
 NARS-FighterPlane「NARS战机」by 徐博洋: <https://github.com/Noctis-Xu/NARS-FighterPlane>
@@ -38,6 +43,6 @@ NARS-FighterPlane「NARS战机」by 徐博洋: <https://github.com/Noctis-Xu/NAR
 
 ## 开源协议
 
-本项目使用GPLv3开源协议。
+本项目开源协议为 _**GPL 3.0**_
 
 - 衍生项目均需开源，并使用相同的开源协议
