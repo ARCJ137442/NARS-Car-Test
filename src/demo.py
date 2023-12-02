@@ -1,18 +1,17 @@
 from datetime import datetime
-from os import path
-from openpyxl import Workbook
+from os import path, getcwd
 import random
 import sys
 import time
-from visdom import Visdom
-import numpy as np
+
 from typing import Container, Tuple, Any, Optional, List
-from pygame.locals import *
-import pandas as pd
-from openpyxl import load_workbook
 import pygame
+from pygame.locals import *
 import pygame_menu
-from os import getcwd
+import numpy as np
+import pandas as pd
+from openpyxl import Workbook, load_workbook
+from visdom import Visdom
 
 from Interface import NARSImplementation
 
@@ -319,7 +318,7 @@ class Game:
         '''小车获取当前位置--获取感知信息
         原文参考：
         接口模块负责持续监听传感器产生的距离信息，将其装配成合法纳思语后单向送入OpenNARS，例如：“< {lsensor} → [50] >.”
-        
+
         # !【2023-11-10 14:21:26】目前的「感知」仍然保留在`Game`模块中，因为其数据仍然需要从`Game`模块中获取。
         '''  # TODO: 或许这个也要和论文所说一样，纳入「接口」模块中
         # print('l_sensor:' + str(self.car.rect.x - self.wall_1.rect.x + Constants.WALL_WIDTH))
@@ -1039,7 +1038,7 @@ class Game:
         self.clock = pygame.time.Clock()
         self.__set_timer()
         self.start_time = pygame.time.get_ticks()
-        
+
     def init_menu(self):
         '''构建主菜单'''
         self.screen.fill(Constants.display.WHITE)
