@@ -385,32 +385,43 @@ class Game:
         亦用于对小车行动的统计
         '''
         print("------------------------")
-        print(key_value)
-        print(self.car.rect.x)
-        if self.car.rect.x == Constants.display.LEFT_CRITICAL_DISTANCE and key_value == 'left':
-            Constants.stats.FAILURE_COUNT += 1
-        if self.car.rect.x == Constants.display.LEFT_CRITICAL_DISTANCE and key_value == 'right':
+        # 打印运动信息
+        print(f'{key_value} | x = {self.car.rect.x}')
+        # 获取运动信息
+        car_moved_left, car_moved_right = key_value == 'left', key_value == 'right'
+        left_on_edge = self.car.rect.x == Constants.display.LEFT_CRITICAL_DISTANCE
+        right_on_edge = self.car.rect.x == Constants.display.RIGHT_CRITICAL_DISTANCE
+        # 计算运动效果 # * 这四个在场地足够宽的情况下是互斥事件
+        left_success = left_on_edge and car_moved_right
+        right_success = right_on_edge and car_moved_left
+        left_failure = left_on_edge and car_moved_left
+        right_failure = right_on_edge and car_moved_right
+        # 判断小车的运动结果
+        if left_success or right_success:
             Constants.stats.SUCCESS_COUNT += 1
-        if self.car.rect.x == Constants.display.RIGHT_CRITICAL_DISTANCE and key_value == 'left':
-            Constants.stats.SUCCESS_COUNT += 1
-        if self.car.rect.x == Constants.display.RIGHT_CRITICAL_DISTANCE and key_value == 'right':
+        elif left_failure or right_failure:
             Constants.stats.FAILURE_COUNT += 1
-        if self.car.rect.x == Constants.display.LEFT_CRITICAL_DISTANCE or self.car.rect.x == Constants.display.RIGHT_CRITICAL_DISTANCE:
+        if left_on_edge or right_on_edge:
             Constants.stats.SUM_COUNT += 1
+
+        # 添加NARS独自操作的成功率
         if Constants.stats.SUM_COUNT > 0:
             Constants.stats.SUCCESS_RATE = round(
                 Constants.stats.SUCCESS_COUNT/Constants.stats.SUM_COUNT, 2)
-        # 添加NARS独自操作的成功率
         if Constants.temp.OP_SIGNAL == True:
-            if self.car.rect.x == Constants.display.LEFT_CRITICAL_DISTANCE and key_value == 'left':
+            if left_failure:
                 print("左侧NARS失败！")
                 Constants.stats.NARS_FAILURE_COUNT += 1
                 Constants.stats.NARS_PROCESS.append('L_F')
-            if self.car.rect.x == Constants.display.LEFT_CRITICAL_DISTANCE and key_value == 'right':
+            if left_success:
                 print("左侧NARS成功！")
                 Constants.stats.NARS_SUCCESS_COUNT += 1
                 Constants.stats.NARS_PROCESS.append('L_S')
-            if self.car.rect.x == Constants.display.RIGHT_CRITICAL_DISTANCE and key_value == 'left':
+                Constants.stats.NARS_LEFT_SUCCESS_COUNT += 1
+                if Constants.stats.NARS_LEFT_SUCCESS_COUNT == 10:
+                    Constants.stats.RESULT_DICT.append(
+                        {'Repeat_time:': int(self.speeding_delta_time_s)})
+            if right_success:
                 print("右侧NARS成功")
                 Constants.stats.NARS_SUCCESS_COUNT += 1
                 Constants.stats.NARS_PROCESS.append('R_S')
@@ -418,11 +429,11 @@ class Game:
                 if Constants.stats.NARS_RIGHT_SUCCESS_COUNT == 10:
                     Constants.stats.RESULT_DICT.append(
                         {'Repeat_time:': int(self.speeding_delta_time_s)})
-            if self.car.rect.x == Constants.display.RIGHT_CRITICAL_DISTANCE and key_value == 'right':
+            if right_failure:
                 print("右侧NARS失败")
                 Constants.stats.NARS_FAILURE_COUNT += 1
                 Constants.stats.NARS_PROCESS.append('R_F')
-            if self.car.rect.x == Constants.display.LEFT_CRITICAL_DISTANCE or self.car.rect.x == Constants.display.RIGHT_CRITICAL_DISTANCE:
+            if left_on_edge or right_on_edge:
                 Constants.stats.NARS_SUM_COUNT += 1
             if Constants.stats.NARS_SUM_COUNT > 0:
                 Constants.stats.NARS_SUCCESS_RATE = round(
@@ -455,30 +466,29 @@ class Game:
 
         # 计算训练单独成功率
         if Constants.temp.TRAIN_SIGNAL == True:
-            if self.car.rect.x == Constants.display.LEFT_CRITICAL_DISTANCE and key_value == 'left':
+            if left_failure:
                 print("左侧训练失败！")
                 Constants.stats.TRAIN_FAILURE_COUNT += 1
                 Constants.stats.TRAIN_PROCESS.append('L_F')
-            if self.car.rect.x == Constants.display.LEFT_CRITICAL_DISTANCE and key_value == 'right':
+            if left_success:
                 print("左侧训练成功！")
                 Constants.stats.TRAIN_SUCCESS_COUNT += 1
                 Constants.stats.TRAIN_PROCESS.append('L_S')
-            if self.car.rect.x == Constants.display.RIGHT_CRITICAL_DISTANCE and key_value == 'left':
+            if right_success:
                 print("右侧训练成功")
                 Constants.stats.TRAIN_SUCCESS_COUNT += 1
                 Constants.stats.TRAIN_PROCESS.append('R_S')
-            if self.car.rect.x == Constants.display.RIGHT_CRITICAL_DISTANCE and key_value == 'right':
+            if right_failure:
                 print("右侧训练失败")
                 Constants.stats.TRAIN_FAILURE_COUNT += 1
                 Constants.stats.TRAIN_PROCESS.append('R_F')
-            if self.car.rect.x == Constants.display.LEFT_CRITICAL_DISTANCE or self.car.rect.x == Constants.display.RIGHT_CRITICAL_DISTANCE:
+            if left_on_edge or right_on_edge:
                 Constants.stats.TRAIN_SUM_COUNT += 1
             if Constants.stats.TRAIN_SUM_COUNT > 0:
                 Constants.stats.TRAIN_SUCCESS_RATE = round(
                     Constants.stats.TRAIN_SUCCESS_COUNT/Constants.stats.TRAIN_SUM_COUNT, 2)
         print("------------------------")
 
-    #
     def __set_timer(self):
         "事件的设置，主要用于事件的触发"
         timer_update_NARS = int(
