@@ -72,6 +72,15 @@ class Constants:
         RIGHT_CRITICAL_DISTANCE = SCREEN_WIDTH - \
             (WALL_WIDTH + CAR_WIDTH + RIGHT_GAP_DISTANCE)  # 300
 
+    class NAL:
+        "NARS语法相关"
+
+        SAFE = "safe"
+        "核心目标「SAFE」"
+
+        LEFT = "left"
+        "核心操作名「向左移动」"
+
     class stats:
         "统计相关"
         # 成功次数、失败次数、总次数
@@ -249,15 +258,21 @@ class Game:
         # 元素
 
         self.car = Car()
+        "小车元素"
         self.wall_1 = Wall_L()
+        "左边的墙"
         self.wall_2 = Wall_R()
+        "右边的墙"
         self.inference_rate = 10
+        "训练频率"
 
         self.enemies = pygame.sprite.Group()
+        "「敌人」元素组"
         self.enemies.add(self.wall_1)
         self.enemies.add(self.wall_2)
 
         self.all_sprites = pygame.sprite.Group()
+        "所有元素的分组"
         self.all_sprites.add(self.car)
         self.all_sprites.add(self.wall_1)
         self.all_sprites.add(self.wall_2)
@@ -265,16 +280,19 @@ class Game:
         # 时钟
 
         self.clock = pygame.time.Clock()
+        "PyGame时钟"
 
         # 字体
 
         # display text like scores, times, etc.
         self.font = pygame.font.Font(
             Constants.path.ASSETS_PATH + "SimSun.ttf", 14)
+        "自身字体（使用自带`SimSun`）"
 
         # 数据显示
 
         self.viz = Visdom(env='carTest')
+        "Visdom可视化环境"
 
         self.opts1 = {
             "title": Constants.stats.VISDOM_TITLE,
@@ -284,10 +302,15 @@ class Game:
             "height": 500,
             "legend": ['总成绩', '训练成绩', '学习成绩', 'NARS活跃度']
         }
+        "Visdom可视化配置"
         self.x = []
+        "数据：x坐标"
         self.Yn = []
-        self.datas = []  # 用于结果存入excel
+        "数据：y坐标（含多种不同的数据）"
+        self.datas = []
+        "总体数据（用于将结果存入excel）"
         self.train_process_str = ''
+        "「训练过程」字串（用于呈现训练过程）"
 
     def on_NARS_output(self, line):
         "在NARS有输出时触发"
@@ -297,17 +320,17 @@ class Game:
 
     def on_NARS_operation(self, operator):
         "在NARS有输出时触发"
-        print(operator)
+        print(f'NARS操作：{operator}')
         if Constants.temp.RUN_OP_FLAG == True:
             # 操作：左移
-            if operator == '^left':
+            if operator == f'^${Constants.NAL.LEFT}':
                 Constants.temp.OP_SIGNAL = True
                 self.condition_judge('left')
                 self.move_left()
                 Constants.stats.NARS_OP_TIMES += 1
                 Constants.temp.OP_SIGNAL = False
             # 操作：右移
-            if operator == '^right':
+            if operator == f'^${Constants.NAL.RIGHT}':
                 Constants.temp.OP_SIGNAL = True
                 self.condition_judge('right')
                 self.move_right()
@@ -337,7 +360,7 @@ class Game:
         "左移运动"
         # 精神运动
         self.getSense()
-        self.NARS.add_operation_experience('left', self.NARS.SELF)
+        self.NARS.add_operation_experience(Constants.NAL.LEFT, self.NARS.SELF)
         # 这里也许有推理时间
         if self.car.rect.x - Constants.display.MOVE_DISTANCE < (Constants.display.WALL_WIDTH+Constants.display.LEFT_GAP_DISTANCE):
             # 物理运动
@@ -345,15 +368,15 @@ class Game:
                 Constants.display.LEFT_GAP_DISTANCE
             # 感知变化
             self.getSense()
-            # 结果
-            self.NARS.add_self_status('safe', True)  # 负反馈
+            # 结果：告知「不安全」
+            self.NARS.add_self_status(Constants.NAL.SAFE, True)  # 负反馈
         else:
             # 物理运动
             self.car.rect.x -= Constants.display.MOVE_DISTANCE
             # 感知变化
             self.getSense()
-            # 结果
-            self.NARS.add_self_status('safe', False)  # 正反馈
+            # 结果：告知「安全」
+            self.NARS.add_self_status(Constants.NAL.SAFE, False)  # 正反馈
         # 数据显示
         self.visdom_data()
 
@@ -361,7 +384,7 @@ class Game:
         "右移运动"
         # 运动发生
         self.getSense()
-        self.NARS.add_operation_experience('right', self.NARS.SELF)
+        self.NARS.add_operation_experience(Constants.NAL.RIGHT, self.NARS.SELF)
         if self.car.rect.x + Constants.display.MOVE_DISTANCE > Constants.display.SCREEN_WIDTH-Constants.display.WALL_WIDTH-Constants.display.CAR_WIDTH-Constants.display.LEFT_GAP_DISTANCE:
             # 物理运动
             self.car.rect.x = Constants.display.SCREEN_WIDTH-Constants.display.WALL_WIDTH - \
@@ -369,13 +392,13 @@ class Game:
             # 感知变化
             self.getSense()
             # 运动发生引发感知变化的结果
-            self.NARS.add_self_status('safe', True)  # 负反馈
+            self.NARS.add_self_status(Constants.NAL.SAFE, True)  # 负反馈
         else:
             self.car.rect.x += Constants.display.MOVE_DISTANCE
             # 感知变化
             self.getSense()
             # 引发结果
-            self.NARS.add_self_status('safe', False)  # 正反馈
+            self.NARS.add_self_status(Constants.NAL.SAFE, False)  # 正反馈
         # 数据显示
         self.visdom_data()
 
@@ -1022,7 +1045,7 @@ class Game:
             nars_type="opennars",
             executables_path=Constants.path.EXECUTABLE_PATH
         )
-        self.NARS.add_self_status_goal('safe')  # 告知「目标是安全」
+        self.NARS.add_self_status_goal(Constants.NAL.SAFE)  # 告知「目标是安全」
         '''原文参考
         系统输入的原初目标为“< SELF —> [safe] >.”，目的是保持自身的安全状态。
         '''
@@ -1036,7 +1059,9 @@ class Game:
         # ! 代码相对原论文的不同点：
         # ! 在实际纳思语的表达中，
         # !     一是其顺序相反——但在逻辑上不影响：即有`<{A} --> {B}>`⇔`<{B} --> {A}>`
-        # !     二是两句「自身有感官」可以被合并，即
+        # !     二是两句「自身有感官」可以被合并，即如下两句逻辑等价：
+        # !         1. `<{SELF} --> {lsensor}>.`和`<{SELF} --> {rsensor}>.`
+        # !         2. `<{SELF} --> {lsensor, rsensor}>.`
         # ! 「传感器名称」在「l/r」和「sensor」之间添加了下划线，以便阅者区分
         '''
 
@@ -1072,7 +1097,7 @@ class Game:
             self.save_and_quit()
         # 发送目标事件
         if event.type == Constants.game.SEND_GOAL_EVENT:
-            self.NARS.add_self_status_goal('safe')
+            self.NARS.add_self_status_goal(Constants.NAL.SAFE)
         # 暂停游戏事件
         if event.type == Constants.game.PAUSE_GAME_EVENT:
             pygame.mixer.Sound(
