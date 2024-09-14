@@ -1,5 +1,13 @@
 # NARS-Car-Test
 
+![GitHub License](https://img.shields.io/github/license/ARCJ137442/NARS-Car-Test?style=for-the-badge&color=0288d1)
+![Code Size](https://img.shields.io/github/languages/code-size/ARCJ137442/NARS-Car-Test?style=for-the-badge&color=0288d1)
+![Lines of Code](https://www.aschey.tech/tokei/github.com/ARCJ137442/NARS-Car-Test?style=for-the-badge&color=0288d1)
+[![Language](https://img.shields.io/badge/language-Python-blue?style=for-the-badge&color=0288d1)](https://www.python.org/)
+
+![Created At](https://img.shields.io/github/created-at/ARCJ137442/NARS-Car-Test?style=for-the-badge)
+![Last Commit](https://img.shields.io/github/last-commit/ARCJ137442/NARS-Car-Test?style=for-the-badge)
+
 NARS小车碰撞实验 demo
 
 ## 背景声明
